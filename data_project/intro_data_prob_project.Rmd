@@ -1,0 +1,173 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `brfss2013`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+### About the Data
+
+BRFSS is an ongoing surveillance system designed to measure behavioral risk factors for the non-institutionalized adult population (18 years of age and older) residing in the US. The BRFSS objective is to collect uniform, state-specific data on preventive health practices and risk behaviors that are linked to chronic diseases, injuries, and preventable infectious diseases that affect the adult population. Factors assessed by the BRFSS in 2013 include tobacco use, HIV/AIDS knowledge and prevention, exercise, immunization, health status, healthy days — health-related quality of life, health care access, inadequate sleep, hypertension awareness, cholesterol awareness, chronic health conditions, alcohol consumption, fruits and vegetables consumption, arthritis burden, and seatbelt use.
+
+### Data Collection
+
+The observations in the sample for the Behavioral Risk Factor Surveillance System (BRFSS) are collected annually from all 50 states, the District of Columbia, Puerto Rico, and Guam. The BRFSS conducts both landline telephone- and cellular telephone-based surveys. In conducting the BRFSS landline telephone survey, interviewers collect data from a randomly selected adult in a household. In conducting the cellular telephone version of the BRFSS questionnaire, interviewers collect data from an adult who participates by using a cellular telephone and resides in a private residence or college housing.
+
+### Implications of Data Collection Method
+
+Due to the way the sampling was performed, two possible biases could have been introduced to the data. Even if the sampling was done randomly, the possibility of non-response bias is high. This is due to the fact that there may be people who were randomly sampled who didn't respond to the telephone or cellphone calls. It is thus unclear if the results are representative of the entire population. This non-response bias can skew results. Furthermore, due to the nature of some of the data collected, bias in self-reported weight and height as a function of age, sex, and mode of self-report could have been introduced, as reported by the study: Trends in national and state-level obesity in the USA after correction for self-report bias: analysis of health surveys published in the Journal of The Royal Society of Medicine on May 2006. 
+
+The findings from this analysis can be generalized to the population of interest since the sampling was done randomly and thus every individual from the population of interest had an equal chance to be considered in the study. However, because this was an observational study in which the data collection did not directly interfere with how the data arise, and not an experiment, these data cannot be used to establish causal links between the variables of interest. Thus, the study can only provide evidence of a naturally occuring association between variables. In general, association does not imply causation, and causation can only be inferred from a randomized experiment. 
+
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+
+As a psychology major and an avid athlete, I have found the relationship between excercise and mental health particularly interesting. I am a very anxious person and have found that with the help of a regular excercise schedule I can have better control over my anxiety. Thus I am interested in exploring the relationship (non-causal) between the reported Days depressed in past 30 days (`qlmentl2`), reported Days anxious in past 30 days (`qlstres2`) and Type of physical activity reported (`exract11`). Will people who engage in certain type of physical activity have generally less anxiety and depression?
+
+**Research quesion 2:**
+
+Another relationship that is interesting to explore is the one between general health (`genhlth`) and Time slept (`sleptim1`). I struggle constantly with sleep times. Research recommends that one should sleep between 7 and 9 hours to stay healthy and reap all the benefits from sleep. However, I also get the feeling that I'm not being productive enough if I sleep more than 5 or 6 hours. So, how does general health associate with sleeping time, and is there a marked difference between genders?
+
+**Research quesion 3:**
+
+Finally I'm interested in seeing the actual relationship between excercise and weight. Do people who excercise at least once a month have a lower median weight than those who do not excercise as regularly?
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
+button (green button with orange arrow) above. Make sure that your code is visible
+in the project you submit. Delete this note when before you submit your work.
+
+**Research quesion 1:**
+
+Let's take a look at the structure of our variables of interest for this research question:
+```{r}
+brfss2013 %>% 
+  select(qlstres2, qlmentl2, exract11) %>% 
+  str()
+```
+
+The `exract11` variable: Type of excercise done is a factor variable with 75 levels. That is too many levels to be able to accurately visualize in one single graph. We want to be able to see the distribution of anxiety and depression levels by the five most popular physical activities. We are also going to filter out the `NA` values, the "Other" option since it doesn't give us any useful information, and include only the top 5 physical activities.
+
+```{r}
+brfss2013 %>% 
+    filter(!is.na(exract11), exract11 != "Other", exract11 %in% c("Walking","Running", "Gardening (spading, weeding, digging, filling)", "Weight lifting", "Bicycling")) %>%
+    group_by(exract11) %>% 
+    summarise(count = n()) %>%
+    arrange(desc(count))
+```
+
+Next we create another variable using the `qlstres2` and `qlmentl2` variables. Because we are interested in the relationship between these two variables and the Type of physical activity (`exract11`) we are going to add up the former two variables (`qlstres2` and `qlmentl2`). This will give us a new variable `anx_dep` which is Days depressed or anxious in the past 30 days. 
+```{r}
+brfss2013 <- brfss2013 %>%
+    mutate(anx_dep = brfss2013$qlstres2 + brfss2013$qlmentl2)
+brfss2013 %>%
+    group_by(anx_dep) %>%
+    summarise(count = n()) %>%
+    arrange(desc(anx_dep))
+```
+
+Finally we graph our result. We are comparing the distribution of the anx_dep variable as a function of the top 5 physical activities.
+```{r}
+brfss2013 %>% 
+    filter(!is.na(exract11), exract11 != "Other", exract11 %in% c("Walking","Running", "Gardening (spading, weeding, digging, filling)", "Weight lifting", "Bicycling")) %>%
+    group_by(exract11) %>% 
+    ggplot(aes(x=exract11, y=anx_dep))+
+    geom_boxplot()
+```
+
+By checking some of the summary statistics we can also see that women suffer from anxiety or depression more frequently than men. 
+```{r}
+brfss2013 %>%
+    filter(!is.na(anx_dep)) %>%
+    group_by(sex) %>%
+    summarise(anx_mean = mean(anx_dep), anx_med = median(anx_dep), anx_sd = sd(anx_dep), anx_min = min(anx_dep), anx_max = max(anx_dep))
+```
+
+Conclusion: We can see that Bycicling, Running, and Weightlifting have the lowest medians for the top 5 physical activities. Bycicling appears to have no dispersion whatsoever. Gardening appears to be very symmetrical. The rest are all right skewed. 
+
+**Research quesion 2:**
+Let's first take a look at some summary statistics of the sleep time (`sleptim1`) variable.
+```{r}
+brfss2013 %>%
+    filter(!is.na(genhlth), !is.na(sleptim1)) %>%
+    group_by(sex) %>%
+    summarise(mean_sleep = mean(sleptim1), med_sleep = median(sleptim1), sd_sleep = sd(sleptim1))
+```
+We can see that most the median hourse slept is the same for both genders. The mean hours slept is a little greater for men, but that may be skewed by outliers. So lets look at the distribution.
+```{r}
+brfss2013 %>%
+    filter(!is.na(genhlth), !is.na(sleptim1)) %>%
+    group_by(sex) %>%
+    ggplot(aes(x=sleptim1)) +
+    geom_histogram() +
+    facet_wrap(~ sex, ncol = 2)
+```
+The graphs show us that the distribution for the female sleeping times is much more symmetrical than that of males which appears to be skewed to the right.
+
+Lastly, lets take a look at the relationship we were looking to answer: how time slept relates with general health and what is the difference between genders.
+```{r}
+brfss2013 %>%
+    filter(!is.na(sleptim1), !is.na(genhlth), !is.na(sex)) %>%
+ggplot(aes(x=sleptim1, y=genhlth, colour=sex, shape=sex)) + 
+    geom_point(alpha=0.3) +
+    facet_wrap( ~ sex, ncol=2) 
+```
+
+Conclusion: We can see that as more hours are spent sleeping more people rate their general health more positive. More People that have a general health rating of excellent sleep more time, and we can even see that the distribution for Excellent is right skewed because their are more outliers sleeping more than 10 hours! The opposite is true for people with a general health rating of Poor. More of them sleep less time and there are more outliers towards the left. 
+
+
+**Research quesion 3:**
+To find out if there is some relationship between exercise and weight we can take a look at some statistics for weight grouped by their exercise habit.
+The summary statistics say that there isn't much of a difference:
+```{r}
+brfss2013 %>%
+    group_by(exerany2) %>%
+    summarise(weight_med = median(as.numeric(weight2)), weight_mean = mean(as.numeric(weight2)), weight_sd = sd(as.numeric(weight2))) %>%
+    filter(!is.na(exerany2))
+```
+
+To see the relationship we can summarise the numeric variable, in this case that is the weight (`weight2`), which we first have to convert into a numeric value and then we plot it.
+```{r}
+brfss2013 %>%
+    filter(!is.na(exerany2)) %>%
+    group_by(exerany2) %>%
+    summarise(med_weight = median(as.numeric(weight2))) %>%
+    ggplot(aes(x = exerany2, y = med_weight)) +
+        geom_bar(stat = "identity")
+```
+
+Conclusion: We can see that there is not such a large difference between the median weight of those who exercise at least once a month and those who don't. 
