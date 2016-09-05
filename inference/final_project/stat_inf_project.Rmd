@@ -1,0 +1,176 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+ 
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+The GSS (General Social Survey) is a survey done by NORC at the University of Chicago. It monitors societal change and studies the complexity of American Society. The survey helps explain trends and constants in:
+
+* attitudes
+* behaviors and,
+* attributes
+
+Its purpose is to examine the structure and functioning of american society and compare the United States to other societies; and make this data easily accesible.
+
+The GSS uses an area probability design which selects survey respondents __randomly__  across households in the United States. Participation in the study is strictly __voluntary__. The GSS data is obtained in __face-to-face interviews__. Under conditions where it's difficult to arrange this, the interviews may be conducted __by telephone__. The survey takes about 90 minutes to administer.
+
+__Since the samples are selected randomly we can generalize the results to the target population__. In this case the whole of the United States. However, __because there is no random assignment it is not possible to establish causation.__
+
+The way the samples are made introduces non-respones bias since people at households may not be available to respond when an interviewer gets there. Thus, those subjects are being excluded from the survey without cause. Additionally, because samples are made across households, adults (18+) living outside of households are being ignored. This includes people living in dorms, military quarters, nursing homes and long-term care facilities.
+
+Reference:
+[http://gss.norc.org/faq](gss.norg.org)
+
+
+* * *
+
+## Part 2: Research question
+Is there a significant difference between the population proportion of male and female respondents who have received welfare from the government?
+
+
+I know after the financial crisis of 2008, many more people started receiving wellfare. I want to know if there are more male or females who receive welfare to better understand one of the outcomes of the crisis.
+
+Note that welfare includes received income from Aid to Families with Dependent Children (AFDC), General Assistance, Supplemental Security Income, or Food Stamps.
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+Lets take a look at the variables that we will be using. First lets look for NAs in our variables of interest:
+
+```{r}
+gss %>%
+    select(getaid) %>%
+    filter(is.na(getaid)) %>%
+    summarise(total = n())
+```
+
+As we can see, there are a ton of NAs in the `getaid` variable. `55601` to be exact. We will not be taking those into account.
+
+Next lets take a look at the distribution of the `inflation-adjusted income` by `sex` and by people who have taken welfare using boxplots:
+
+```{r}
+no_nas <- gss %>%
+    filter(!is.na(getaid))
+
+ggplot(no_nas, aes(x = sex, y = coninc, fill = sex)) + geom_boxplot() +
+    facet_wrap(~ getaid, ncol = 2)
+```
+
+It's pretty interesting to see that income is pretty similair in both sexes for those who have taken welfare. There is however a visible difference in income by those who have not taken welfare. The male income tends to be higher than the female income. 
+
+Another helpful way to visualize the variables for our research question would be to use barplots -not histograms- since these are categorical variables.
+
+```{r}
+
+ggplot(no_nas, aes(x = getaid)) +
+    geom_bar() +
+    facet_wrap(~ sex, ncol = 2)
+```
+
+The amount of people, both male and female who have not received welfare is far greater than those that have received welfare. There also appear to be more females in the sample than males. However, the trend maintains: greater amount of people have not received welfare. We can see though, that there appear to be more females who have received welfare than males. Is it proportional to the sample size though? Is this difference statistically significant? That's what we will find out with our hypotheses test.
+
+Finally, lets take a look at the actual numbers of females and males who have received welfare:
+
+```{r}
+gss %>%
+    filter(!is.na(getaid)) %>%
+    group_by(getaid, sex) %>%
+    summarise(total = n())
+```
+
+* * *
+
+## Part 4: Inference
+
+In essence, my research question is comparing two proportions:
+ * The proportion of males who have received welfare.
+ * The proportion of females who have received welfare.
+ 
+#### State Hypotheses
+ 
+ Is there a significant difference between the two population proportions?
+ 
+ The hypotheses would then be the following:
+ 
+ H0: Pmale - Pfemale = 0
+ 
+ HA: Pmale - pfemale != 0
+ 
+#### Check Conditions
+ 
+ 1. Independence
+    * Within groups: samples observations are independent within each group since they were randomly sampled and represent less than 10% of the population
+    * Between groups: the two groups are independent of each other (non-paired)
+2. Sample size/skew:
+    * n1 * p1 >= 10 and n1(1 - p1) >= 10
+    * n2 * p2 >= 10 and n2(1 - p2) >= 10
+    
+Lets make sure the sample size/skew condition checks out. First, lets find out the total successes (`yes`) and the total failiures (`no`) and compare them to the conditions: Note that we are only taking into account those respondents who answered either `yes` or `no`. Any type of NA was not considered.
+
+```{r}
+gss %>%
+    filter(!is.na(getaid)) %>%
+    group_by(getaid, sex) %>%
+    summarise(total = n())
+```
+
+ We can see that the sample size/skew conditions are met for this inference for comparing two proportions.
+ 
+#### Methods
+
+To answer my research question I will be using a Hypotheses Test and a Confidence Interval for comparing two proportions. Both will be done at the 95% confidence level. Using both methods will allow us to see if they agree with each other and thus be more certain of our results.
+
+#### Inference
+
+We will be using the `inference` function for both the hypotheses test and the confidence interval, the parameters however, will be changed according to the method. Lets start with the confidence interval:
+
+```{r}
+inference(y = getaid, x = sex, data = gss, statistic = "proportion", type = "ci", method = "theoretical", success = "Yes")
+```
+
+#### Result: Confidence Interval
+
+Since the confidence interval does not contain the null value `0` we reject the null hypotheses. The confidence interval was (-0.1474, -0.0692) which means that we are 95% confident that the proportion of males who have received welfare is 14% - 6% lower than the proportion of females who have received welfare.
+
+Next we will perform the hypotheses test:
+
+```{r}
+inference(y = getaid, x = sex, data = gss, type = "ht", statistic = "proportion", success = "Yes", method = "theoretical", null = 0, alternative = "twosided")
+```
+
+#### Result: Hypotheses Test
+
+Our hypotheses test resulted in a `p-value` of < 0.0001 which is less than our significance level (0.05 at a 95% confidence level) and thus we reject the null hypotheses. We are 95% confident that the proportion of males who have received welfare is significantly lower than the proportion of females who have received welfare.
+
+Additionally, the results of our confidence interval agree with the results of our hypotheses test.
+ 
+ 
+ 

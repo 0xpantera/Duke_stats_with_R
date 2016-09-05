@@ -76,6 +76,11 @@ As you review the variable summaries, consider which variables are categorical a
 are numerical. For numerical variables, are there outliers? If you aren't sure or want to 
 take a closer look at the data, make a graph.
 
+```{r}
+
+```
+
+
 ## Exploratory data analysis
 
 We will first start with analyzing the weight gained by mothers throughout the 
@@ -86,6 +91,13 @@ gained by mothers during pregnancy. The `summary` function can also be useful.
 
 ```{r summary}
 summary(nc$gained)
+
+nc %>%
+    filter(is.na(gained)) %>%
+    summarise(count = n())
+
+ggplot(nc, aes(x = gained)) +
+    geom_histogram()
 ```
 
 2. How many mothers are we missing weight gain data from?
@@ -111,7 +123,8 @@ false about the relationship between habit and weight?
 </ol>
 ```{r habit-weight-box}
 # type your code for the Question 3 here, and Knit
-
+ggplot(nc, aes(x = habit, weight)) +
+    geom_boxplot()
 ```
 
 The box plots show how the medians of the two distributions compare, but we can
@@ -123,6 +136,10 @@ first group the data by the `habit` variable, and then calculate the mean
 nc %>%
   group_by(habit) %>%
   summarise(mean_weight = mean(weight))
+
+nc %>%
+  group_by(habit) %>%
+  summarise(group_size = n())
 ```
 
 There is an observed difference, but is this difference statistically 
@@ -190,7 +207,7 @@ between 0 and 1. Also note that when doing a confidence interval arguments like
 <li> We are 95% confident that babies born to nonsmoker mothers are on average 0.05 to 0.58 pounds heavier at birth than babies born to smoker mothers. </li>
 </ol>
 ```{r habit-weight-ci}
-# type your code for the Question 5 here, and Knit
+inference(y = weight, x = habit, data = nc, statistic = "mean", type = "ci", method = "theoretical")
 
 ```
 
@@ -199,7 +216,7 @@ By default the function reports an interval for ($\mu_{nonsmoker} - \mu_{smoker}
 
 ```{r inf-weight-habit-ci, tidy=FALSE}
 inference(y = weight, x = habit, data = nc, statistic = "mean", type = "ci", 
-          method = "theoretical", order = c("smoker","nonsmoker"))
+          method = "theoretical", order = c("smoker","nonsmoker"), conf_level = 0.95)
 ```
 
 6. Calculate a 99% confidence interval for the average length of pregnancies 
@@ -214,7 +231,7 @@ interval?
 <li>(38.0952 , 38.5742)</li>
 </ol>
 ```{r weeks-ci-99}
-# type your code for Question 6 here, and Knit
+inference(y = weeks, data = nc, statistic = "mean", type = "ci", method = "theoretical", conf_level = 0.99)
 
 ```
 
@@ -222,7 +239,7 @@ interval?
 **Exercise**: Calculate a new confidence interval for the same parameter at the 90% confidence level. Comment on the width of this interval versus the one obtained in the the previous exercise.
 </div>
 ```{r weeks-ci-90}
-# type your code for the Exercise here, and Knit
+inference(y = weeks, data = nc, statistic = "mean", type = "ci", method = "theoretical", conf_level = 0.90)
 
 ```
 
@@ -230,15 +247,16 @@ interval?
 **Exercise**: Conduct a hypothesis test evaluating whether the average weight gained by younger mothers is different than the average weight gained by mature mothers.
 </div>
 ```{r gained-mature-ht}
-# type your code for the Exercise here, and Knit
-
+inference(y = gained, x = mature, data = nc, statistic = "mean", type = "ht", null = 0, 
+          alternative = "twosided", method = "theoretical")
 ```
 
 7. Now, a non-inference task: Determine the age cutoff for younger and mature 
 mothers. Use a method of your choice, and explain how your method works.
 ```{r cutoff-mature}
-# type your code for Question 7 here, and Knit
-
+nc %>%
+  group_by(mature) %>%
+  summarise(max_age = max(mage), min_age = min(mage))
 ```
 
 <div id="exercise">
