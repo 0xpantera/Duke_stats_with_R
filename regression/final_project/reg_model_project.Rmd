@@ -1,0 +1,290 @@
+---
+title: "Modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `movies`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+
+The data set is comprised of 651 randomly sampled movies produced and released before 2016. The use of a random sample allows us to generalize the outcomes of inferences made to the actual population of movies from which the sample was produced. 
+
+There is no mention of experiments where random assignment was used on either a control or experimental group. Thus we can not establish causality and will only be able to find correlations within the data set.
+
+* * *
+
+## Part 2: Research question
+
+
+What combination of variables in the data set best predicts a movie's average score? Are they the obvious ones?
+
+A movie's average score will be the average of the Rotten Tomatoes score and the IMDB score for that movie.
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+There are three main points I consider important to check before starting to model:
+
+* The scale of Rotten Tomatoes scores and IMDB scores: Since what we want to predict is the average of these two scores they both need to be in the same scale. Otherwise we will need to standardize them.
+
+* The linear relationship between the explanatory variables to avoid colinearity.
+
+* A general exploration of the variables and their distributions to see which ones appear to be the most useful and avoid the ones that wouldn't make any sense to include. 
+
+
+Scale of Rotten Tomatoes and IMDB scores:
+```{r}
+range(movies$imdb_rating)
+range(movies$critics_score)
+range(movies$audience_score)
+```
+
+The Rotten Tomatoes ratings go from 1 to 100 and the IMDB ratings go from 1 to 10. This means we will have to normalize them before making the new variable that averages them.
+
+
+Linear relationship between numerical variables:
+```{r warning=FALSE}
+numerical_columns <- c("runtime", "thtr_rel_year", "thtr_rel_month", "dvd_rel_year", 
+                            "dvd_rel_month", "imdb_rating", "critics_score",
+                       "audience_score")
+ggpairs(movies, columns = numerical_columns, columnLabels = c("time", "thtr_yr", "thtr_mnth", "dvd_yr",
+                                                              "dvd_mnth", "imdb", "critics", "audience"))
+```
+
+There seems to be a strong positive linear relationship between IMDB rating and the critis and audience scores from Rotten Tomatoes. This makes sense since peoples rating of a movie wont vary greatly. There is no other strong linear relationship between any other variables.
+
+
+Lets take a look at the other variables that may not be clearly useful:
+```{r}
+summary(movies$director)
+```
+
+The `director` and `studio` variable are both character variables that contain the director of the movie and the studio that produced it. Because the directors and studios vary so much, they have too many levels to be useful. So these variables are not going to be useful.
+
+
+Just from taking a quick look at the variables we can see that there are definitly some which are going to be useless for the model, such as both `url` variables. From reading the Codebook we can also confirm that the variables `actor1` through `actor5` were just used to determine if the actors in the movie had won oscars. We wont be using any of those.
+
+
+* * *
+
+## Part 4: Modeling
+
+
+First, lets create the avg_score variable which will be our response variable. To do this we first need to normalize the IMDB rating so that it is on the same scale as the IMDB critic and audience scores.
+```{r}
+movies <- movies %>%
+    mutate(avg_score = ((imdb_rating * 10) + critics_score + audience_score)/3)
+```
+
+
+Next, lets remove the columns we won't be using so that they don't distract us:
+```{r}
+drop_cols <- c("imdb_url", "rt_url", "actor1", "actor2", "actor3", "actor4", "actor5", "director", "studio")
+movies <- movies %>% select(-one_of(drop_cols))
+```
+
+
+### Variables
+
+
+Now we can start making our model. We are going to use the following variables for the full model:
+
+* `title_type`
+* `runtime`
+* `thtr_rel_month`
+* `imdb_num_votes`
+* `critics_rating`
+* `audience_rating`
+* `best_pic_win`
+* `best_actor_win`
+* `best_actress_win`
+* `best_dir_win`
+* `top200_box`
+
+We are not using `title` because its not numerical or categorical, it's just a character variable with the name of the movie. `genre` and `mpaa_rating` may not be as significant and have too many levels, adding a lot of noise to the model. From the theater releases we just selected the month to take into account seasonality. Year and day probably don't have that much influence on the score. We also left out `imdb_rating`, `critics_score`, `audience_score` since our response variable is composed of them it would be too obvious. Lastly, `best_pic_nom` will add noise if we also have `best_pic_won` for those movies which were nominated and won the oscar.
+
+
+### Model Selection Method
+
+
+We are going to be using the backwards elimination with the p-value in order to have significant predictors and because it requires fitting fewer models. Sure, adjusted R-squared would give us more reliable predictions but it would take more time. 
+
+```{r}
+m1 <- lm(avg_score ~ title_type + runtime + thtr_rel_month + imdb_num_votes + critics_rating
+         + audience_rating + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, 
+         data = movies)
+summary(m1)
+```
+
+We are going to remove the `thtr_rel_month` since it has a very high p-value. Eventhough the explanatory variable with the highest p-value was `best_pic_win` we are going to leave it for the time being. Since I am a big film buff, let's call this "Expert Opinion". 
+
+```{r}
+m2 <- lm(avg_score ~ title_type + runtime + imdb_num_votes + critics_rating
+         + audience_rating + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, 
+         data = movies)
+summary(m2)
+```
+
+I was hoping the p-value of `best_pic_win` would decrease after eliminating the last variable but it didn't. So we are going to get rid of it since it still has the highest p-value. Expert opinion be damned.
+
+```{r}
+m3 <- lm(avg_score ~ title_type + runtime + imdb_num_votes + critics_rating
+         + audience_rating + best_actor_win + best_actress_win + best_dir_win + top200_box, 
+         data = movies)
+summary(m3)
+```
+
+Lets keep removing the explanatory variable with the highest p-value. This time its `top200_box`.
+
+```{r}
+m4 <- lm(avg_score ~ title_type + runtime + imdb_num_votes + critics_rating
+         + audience_rating + best_actor_win + best_actress_win + best_dir_win, data = movies)
+summary(m4)
+```
+
+Next its off with `best_actress_win`. 
+
+```{r}
+m5 <- lm(avg_score ~ title_type + runtime + imdb_num_votes + critics_rating
+         + audience_rating + best_actor_win + best_dir_win, data = movies)
+summary(m5)
+```
+
+And lets keep going by removing `best_actor_win` now.
+
+```{r}
+m6 <- lm(avg_score ~ title_type + runtime + imdb_num_votes + critics_rating
+         + audience_rating + best_dir_win, data = movies)
+summary(m6)
+```
+
+And finally we remove the last remaining non-significant explanatory variable: `best_dir_win`
+```{r}
+m7 <- lm(avg_score ~ title_type + runtime + imdb_num_votes + critics_rating
+         + audience_rating, data = movies)
+summary(m7)
+```
+
+### Model Diagnostics
+
+
+Now that we have our model where every explanatory variable is statistically significant we have to run model diagnostics to make sure all conditions are met:
+
+
+__Nearly normal residuals with mean 0__
+```{r}
+hist(m7$residuals)
+qqnorm(m7$residuals)
+qqline(m7$residuals)
+```
+
+
+Residuals appear to be nearly normally distributed around 0 with a little skew to the left.
+
+
+__Constant variability of residuals__
+```{r}
+plot(m7$residuals ~ m7$fitted.values)
+plot(abs(m7$residuals) ~ m7$fitted.values)
+```
+
+
+Here we can see that the residuals have a slight fan shape and are not randomly scattered in a band with constant width around 0.
+
+
+__Independent residuals__
+```{r}
+plot(m7$residuals)
+abline(h = 0)
+```
+
+
+There is no time series structure in the plot of residuals vs. order of data collection. So we can conclude that residuals are independent. 
+
+
+### Model Coefficients
+
+The estimate for `av_score` reflects how much higher a movie is expected to score if it has a runtime that is one point higher *while holding all other variables constant*.
+
+* * *
+
+## Part 5: Prediction
+
+
+We are going to use our model to predict the `avg_score` of the movie "Deadpool". The information for the movie comes from two sites:
+
+* [Rotten Tomatoes](https://www.rottentomatoes.com/m/deadpool#audience_reviews)
+* [IMDB](http://www.imdb.com/title/tt1431045/?ref_=nv_sr_1)
+
+First we need to add the movie as a new datafame which we will then pass to the `predict()` functions `newdata` parameter:
+```{r}
+
+new_movie <- data.frame(title_type = "Feature Film", runtime = 103, imdb_num_votes = 518821,
+                        critics_rating = "Certified Fresh", audience_rating = "Upright")
+```
+
+
+Now, lets see how the prediction goes:
+```{r}
+predicted_score <- predict(m7, newdata = new_movie)
+predicted_score
+```
+
+
+Our model predicts that Deadpool has an average score of 82.25. Lets compare that to its actual score. Remember that our response variable is a new variable we created by first normalizing the IMDB score and then averaging it with the critics and audience scores from Rotten Tomatoes.
+```{r}
+deadpool_real_rating <- (((8.1 * 10) + 90 + 84) / 3)
+deadpool_real_rating
+
+differnce <- deadpool_real_rating - predicted_score
+differnce
+```
+
+
+Our models prediction is off by 2.75 points fromt the actual `avg_score`. 
+Now lets quantify the uncertainty around this prediction with a prediction interval.
+```{r}
+predict(m7, new_movie, interval = "prediction", level = 0.95)
+```
+
+Hence, the model predicts, with 95% confidence, that a feature film with a runtime of 103 minutes, a critics rating of "Certified Fresh", an audience rating of "Upright" and with 518821 votes on IMDB will have an average score between 67.12  and 97.39.
+
+* * *
+
+## Part 6: Conclusion
+
+
+Regarding the data and my research question I found the resulting model after the model selection method to be counter intuitive and surprising in some of the variables it selected. I would have guessed that having a cast or a director with an oscar would have a great impact on the average score of a movie. Others I just assumed would also a bit more impact, such as being in the top 200 of the box office, made sense when they weren't significant. Most blockbuster movies aren't that good. 
+
+In terms of short comings, I would have liked to do backwards selection with adjusted R-squared. I believe the model would have been more precise. The only downside to that is that I would've had to fit more models. I will definitly research ways to automate the model selection process which seems too long. Overall, I am very satisfied with the results. 
